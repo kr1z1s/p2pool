@@ -355,6 +355,10 @@ class WorkerBridge(worker_interface.WorkerBridge):
         
         packed_gentx = bitcoin_data.tx_id_type.pack(gentx) # stratum miners work with stripped transactions
         other_transactions = [tx_map[tx_hash] for tx_hash in other_transaction_hashes]
+
+        del tx_hashes
+        if self.node.cur_share_ver >= 34:
+            tx_map = {} # we can free up this memory now
         
         mm_later = [(dict(aux_work, target=aux_work['target'] if aux_work['target'] != 'p2pool' else share_info['bits'].target), index, hashes) for aux_work, index, hashes in mm_later]
         
@@ -383,7 +387,8 @@ class WorkerBridge(worker_interface.WorkerBridge):
         getwork_time = time.time()
         lp_count = self.new_work_event.times
         merkle_link = bitcoin_data.calculate_merkle_link([None] + other_transaction_hashes, 0) if share_info.get('segwit_data', None) is None else share_info['segwit_data']['txid_merkle_link']
-        
+        del other_transaction_hashes
+
         if print_throttle is 0.0:
             print_throttle = time.time()
         else:
@@ -428,11 +433,11 @@ class WorkerBridge(worker_interface.WorkerBridge):
             pow_hash = self.node.net.PARENT.POW_FUNC(bitcoin_data.block_header_type.pack(header))
             try:
                 if pow_hash <= header['bits'].target or p2pool.DEBUG:
-                    helper.submit_block(dict(header=header, txs=[new_gentx] + other_transactions), False, self.node)
                     if pow_hash <= header['bits'].target:
                         print
                         print 'GOT BLOCK FROM MINER! Passing to bitcoind! %s%064x' % (self.node.net.PARENT.BLOCK_EXPLORER_URL_PREFIX, header_hash)
                         print
+                    helper.submit_block(dict(header=header, txs=[new_gentx] + other_transactions), False, self.node)
             except:
                 log.err(None, 'Error while processing potential block:')
             
